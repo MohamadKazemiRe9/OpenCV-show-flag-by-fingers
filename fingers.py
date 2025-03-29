@@ -39,11 +39,10 @@ root.title("Mister Programmer")
 root.geometry("800x600")
 
 # Create a black image for covering image
-black_image = Image.new('RGBA', (800, 600), color=(0, 0, 0, 255))
+black_image = Image.new("RGBA", (800, 600), color=(0, 0, 0, 255))
 
-# Load the show image and convert to RGBA for transparency control
-show_image = Image.open("show.png").convert("RGBA")
-show_image = show_image.resize((800, 600))
+# Load the image and convert to RGBA for transparency control
+show_image = Image.open("show.png").convert("RGBA").resize((800, 600))
 
 # Label to display images
 label = tk.Label(root)
@@ -56,44 +55,52 @@ def update_frame():
         print("Error: Failed to capture frame.")
         root.after(10, update_frame)
         return
-    
+
     frame = cv2.flip(frame, 1)
-
+    
     rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-    result = hands.process(rgb_frame)
 
-    # Initialize the image to be shown
+    # Process the frame with Mediapipe
+    with mp_hands.Hands(min_detection_confidence=0.7, min_tracking_confidence=0.5) as hands:
+        result = hands.process(rgb_frame)
+
+    # Initialize the output image
     output_image = black_image.copy()
-
+    
     # If hands are detected in the frame
     if result.multi_hand_landmarks:
         for hand_landmarks in result.multi_hand_landmarks:
             finger_count = count_fingers(hand_landmarks)
             mp_drawing.draw_landmarks(frame, hand_landmarks, mp_hands.HAND_CONNECTIONS)
 
-            cv2.putText(frame, f"Fingers: {finger_count}", (50, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2, cv2.LINE_AA)
+            # Display finger count on the frame
+            cv2.putText(
+                frame,
+                f"Fingers: {finger_count}",
+                (10, 30),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                1,
+                (255, 255, 255),
+                2,
+            )
 
             # Calculate opacity (0 to 1) based on the number of fingers count
-            opacity = finger_count / 5.0
+            opacity = min(1.0, max(0.0, finger_count / 5.0))
+            output_image = Image.blend(black_image, show_image, opacity)
 
-            if opacity > 0:
-                output_image = Image.blend(black_image, show_image, opacity)
-
-            output_image_tk = ImageTk.PhotoImage(output_image)
-            label.config(image=output_image_tk)
-            label.image = output_image_tk
-
-    else:
-        label.config(image=ImageTk.PhotoImage(black_image))
+    # Update the Tkinter label with the output image
+    output_image_tk = ImageTk.PhotoImage(output_image)
+    label.config(image=output_image_tk)
+    label.image = output_image_tk
 
     # Show the frame in the OpenCV window
-    cv2.imshow('Finger Counter', frame)
+    cv2.imshow("Finger Counter", frame)
 
     root.after(10, update_frame)
 
-with mp_hands.Hands(min_detection_confidence=0.7, min_tracking_confidence=0.5) as hands:
-    root.after(0, update_frame)
-    root.mainloop()
+# Start the Tkinter loop
+root.after(0, update_frame)
+root.mainloop()
 
 cap.release()
 cv2.destroyAllWindows()
